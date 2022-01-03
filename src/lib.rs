@@ -4,7 +4,8 @@ pub use {
     error::*,
 };
 
-
+/// Query the xterm interface, assuming the terminal is in raw mode
+/// (or we would block waiting for a newline).
 pub fn query(
     query: &str,
     timeout_ms: isize,
