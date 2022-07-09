@@ -3,7 +3,7 @@
 ///
 /// This example uses crossterm because I'm used to it but you may use other
 /// crates to manage raw mode.
-fn query(query: &str, timeout_ms: isize) -> Result<String, xterm_query::XQError> {
+fn query(query: &str, timeout_ms: u64) -> Result<String, xterm_query::XQError> {
     use crossterm::terminal::*;
     enable_raw_mode()?;
     let res = xterm_query::query(query, timeout_ms);

@@ -6,26 +6,17 @@ pub use {
 
 /// Query the xterm interface, assuming the terminal is in raw mode
 /// (or we would block waiting for a newline).
-pub fn query(
+pub fn query<MS: Into<u64>>(
     query: &str,
-    timeout_ms: isize,
+    timeout_ms: MS,
 ) -> Result<String, XQError> {
     // I'll use <const N: usize = 100> as soon as default values for const generics
     // are stabilized. See https://github.com/rust-lang/rust/issues/44580
     const N: usize = 100;
     let mut response = [0; N];
-    let n = query_buffer(query, &mut response, timeout_ms)?;
+    let n = query_buffer(query, &mut response, timeout_ms.into())?;
     let s = std::str::from_utf8(&response[..n])?;
     Ok(s.to_string())
-}
-
-#[cfg(not(unix))]
-pub fn query_buffer(
-    _query: &str,
-    _buffer: &mut [u8],
-    _timeout_ms: isize,
-) -> Result<usize, XQError> {
-    Err(XQError::Unsupported)
 }
 
 /// Query the xterm interface, assuming the terminal is in raw mode
@@ -33,12 +24,12 @@ pub fn query_buffer(
 ///
 /// Return the number of bytes read.
 #[cfg(unix)]
-pub fn query_buffer(
+pub fn query_buffer<MS: Into<u64>>(
     query: &str,
     buffer: &mut [u8],
-    timeout_ms: isize,
+    timeout_ms: MS,
 ) -> Result<usize, XQError> {
-    use nix::sys::epoll::*;
+    use mio::{unix::SourceFd, Events, Poll, Interest, Token};
     use std::io::{self, Read, Write};
     let stdin = io::stdin();
     let mut stdin = stdin.lock();
@@ -46,21 +37,31 @@ pub fn query_buffer(
     let mut stdout = stdout.lock();
     write!(stdout, "{}", query)?;
     stdout.flush()?;
-    let poll_fd = epoll_create1(EpollCreateFlags::empty())?;
-    let mut event = EpollEvent::new(EpollFlags::EPOLLIN, 0);
-    epoll_ctl(
-        poll_fd,
-        EpollOp::EpollCtlAdd,
-        nix::libc::STDIN_FILENO,
-        Some(& mut event),
+    let mut poll = Poll::new()?;
+    let mut events = Events::with_capacity(1024);
+    let mut stdin_fd = SourceFd(&nix::libc::STDIN_FILENO); // fancy way to pass the 0 const
+    poll.registry().register(
+        &mut stdin_fd,
+        Token(0),
+        Interest::READABLE,
     )?;
-    let mut events = [EpollEvent::empty(); 1];
-    let fd_count = epoll_wait(poll_fd, &mut events, timeout_ms)?;
-    if fd_count == 0 {
-        Err(XQError::Timeout) // no file descriptor was ready in time
-    } else {
-        let bytes_written = stdin.read(buffer)?;
-        Ok(bytes_written)
+    let timeout = std::time::Duration::from_millis(timeout_ms.into());
+    poll.poll(&mut events, Some(timeout))?;
+    for event in &events {
+        if event.token() == Token(0) {
+            let bytes_written = stdin.read(buffer)?;
+            return Ok(bytes_written)
+        }
     }
+    Err(XQError::Timeout) // no file descriptor was ready in time
+}
+
+#[cfg(not(unix))]
+pub fn query_buffer(
+    _query: &str,
+    _buffer: &mut [u8],
+    _timeout_ms: u64,
+) -> Result<usize, XQError> {
+    Err(XQError::Unsupported)
 }
 
