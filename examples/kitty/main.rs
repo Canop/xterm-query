@@ -1,4 +1,3 @@
-
 /// In order to query, go to raw mode, query the terminal, then leave raw mode.
 ///
 /// This example uses crossterm because I'm used to it but you may use other
@@ -30,4 +29,3 @@ pub fn main() {
     }
     println!("Operation took {:?}", start.elapsed());
 }
-

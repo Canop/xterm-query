@@ -1,4 +1,3 @@
-
 /// xterm-query error type
 #[derive(thiserror::Error, Debug)]
 pub enum XQError {
@@ -18,5 +17,3 @@ pub enum XQError {
     #[error("Unsupported platform")]
     Unsupported,
 }
-
-
