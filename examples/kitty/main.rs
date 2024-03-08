@@ -13,7 +13,7 @@ fn query(query: &str, timeout_ms: u64) -> Result<String, xterm_query::XQError> {
 /// Ask the terminal whether the Kitty image protocol is supported
 pub fn main() {
     let start = std::time::Instant::now();
-    match query("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[c", 20) {
+    match query("\x1b_Gi=31,s=1,v=1,a=q,t=d,f=24;AAAA\x1b\\\x1b[c", 50) {
         Err(e) => {
             eprintln!("Error: {}", e);
             println!("(we should assume the Kitty image protocol isn't available)");
