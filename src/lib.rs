@@ -25,16 +25,20 @@ pub fn query_buffer<MS: Into<u64>>(
     timeout_ms: MS,
 ) -> Result<usize, XQError> {
     use mio::{unix::SourceFd, Events, Interest, Poll, Token};
-    use std::io::{self, Read, Write};
-    let stdin = io::stdin();
-    let mut stdin = stdin.lock();
+    use std::{
+        fs::File,
+        io::{self, Read, Write},
+        os::fd::AsRawFd,
+    };
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     write!(stdout, "{}", query)?;
     stdout.flush()?;
+    let mut stdin = File::open("/dev/tty")?;
     let mut poll = Poll::new()?;
     let mut events = Events::with_capacity(1024);
-    let mut stdin_fd = SourceFd(&nix::libc::STDIN_FILENO); // fancy way to pass the 0 const
+    let stdin_raw_fd = stdin.as_raw_fd();
+    let mut stdin_fd = SourceFd(&stdin_raw_fd); // fancy way to pass the 0 const
     poll.registry()
         .register(&mut stdin_fd, Token(0), Interest::READABLE)?;
     let timeout = std::time::Duration::from_millis(timeout_ms.into());
