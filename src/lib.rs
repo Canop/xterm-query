@@ -24,32 +24,44 @@ pub fn query_buffer<MS: Into<u64>>(
     buffer: &mut [u8],
     timeout_ms: MS,
 ) -> Result<usize, XQError> {
-    use mio::{unix::SourceFd, Events, Interest, Poll, Token};
+    use nix::sys::{
+        select::{select, FdSet},
+        time::TimeVal,
+    };
     use std::{
         fs::File,
         io::{self, Read, Write},
-        os::fd::AsRawFd,
+        os::fd::{AsFd, AsRawFd},
+        time::Duration,
     };
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     write!(stdout, "{}", query)?;
     stdout.flush()?;
     let mut stdin = File::open("/dev/tty")?;
-    let mut poll = Poll::new()?;
-    let mut events = Events::with_capacity(1024);
-    let stdin_raw_fd = stdin.as_raw_fd();
-    let mut stdin_fd = SourceFd(&stdin_raw_fd); // fancy way to pass the 0 const
-    poll.registry()
-        .register(&mut stdin_fd, Token(0), Interest::READABLE)?;
-    let timeout = std::time::Duration::from_millis(timeout_ms.into());
-    poll.poll(&mut events, Some(timeout))?;
-    for event in &events {
-        if event.token() == Token(0) {
+    let stdin_fd = stdin.as_fd();
+    let mut fd_set = FdSet::new();
+    fd_set.insert(stdin_fd);
+
+    let timeout_us = Duration::from_millis(timeout_ms.into())
+        .as_micros()
+        .try_into()
+        .unwrap();
+    let mut tv = TimeVal::new(0, timeout_us);
+    match select(
+        stdin_fd.as_raw_fd() + 1,
+        Some(&mut fd_set),
+        None,
+        None,
+        Some(&mut tv),
+    ) {
+        Ok(n) if n == 0 => Err(XQError::Timeout),
+        Ok(_) => {
             let bytes_written = stdin.read(buffer)?;
-            return Ok(bytes_written);
+            Ok(bytes_written)
         }
+        Err(e) => Err(XQError::IO(e.into())),
     }
-    Err(XQError::Timeout) // no file descriptor was ready in time
 }
 
 #[cfg(not(unix))]
