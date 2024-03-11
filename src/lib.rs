@@ -1,16 +1,15 @@
 mod error;
 
-use std::os::fd::BorrowedFd;
+use {nix::errno::Errno, std::os::fd::BorrowedFd};
 
 pub use error::*;
-
-use nix::errno::Errno;
 
 /// Query the xterm interface, assuming the terminal is in raw mode
 /// (or we would block waiting for a newline).
 pub fn query<MS: Into<u64>>(query: &str, timeout_ms: MS) -> Result<String, XQError> {
-    // I'll use <const N: usize = 100> as soon as default values for const generics
-    // are stabilized. See https://github.com/rust-lang/rust/issues/44580
+    // I'll use <const N: usize = 100> when default values for const generics
+    // are stabilized for enough rustc versions
+    // See https://github.com/rust-lang/rust/issues/44580
     const N: usize = 100;
     let mut response = [0; N];
     let n = query_buffer(query, &mut response, timeout_ms.into())?;
@@ -41,7 +40,7 @@ pub fn query_buffer<MS: Into<u64>>(
     let stdin_fd = stdin.as_fd();
 
     match wait_for_input(stdin_fd, timeout_ms) {
-        Ok(n) if n == 0 => Err(XQError::Timeout),
+        Ok(0) => Err(XQError::Timeout),
         Ok(_) => {
             let bytes_written = stdin.read(buffer)?;
             Ok(bytes_written)
@@ -70,11 +69,13 @@ fn wait_for_input<MS: Into<u64>>(fd: BorrowedFd<'_>, timeout_ms: MS) -> Result<i
 // https://github.com/tokio-rs/mio/issues/1377
 #[cfg(target_os = "macos")]
 fn wait_for_input<MS: Into<u64>>(fd: BorrowedFd<'_>, timeout_ms: MS) -> Result<i32, Errno> {
-    use nix::sys::{
-        select::{select, FdSet},
-        time::TimeVal,
+    use {
+        nix::sys::{
+            select::{select, FdSet},
+            time::TimeVal,
+        },
+        std::{os::fd::AsRawFd, time::Duration},
     };
-    use std::{os::fd::AsRawFd, time::Duration};
     let mut fd_set = FdSet::new();
     fd_set.insert(fd);
     let timeout_us = Duration::from_millis(timeout_ms.into())
