@@ -14,7 +14,7 @@ readme = "README.md"
 thiserror = "1.0"
 
 [target.'cfg(unix)'.dependencies]
-nix = { version = "0.28", features = ["poll"] }
+nix = { version = "0.29", features = ["poll"] }
 
 [dev-dependencies]
 crossterm = "0.21"
