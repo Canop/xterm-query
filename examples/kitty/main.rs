@@ -5,7 +5,7 @@
 fn query(query: &str, timeout_ms: u64) -> Result<String, xterm_query::XQError> {
     use crossterm::terminal::*;
     enable_raw_mode()?;
-    let res = xterm_query::query(query, timeout_ms);
+    let res = xterm_query::query_osc(query, timeout_ms);
     disable_raw_mode()?;
     res
 }
@@ -19,7 +19,7 @@ pub fn main() {
             println!("(we should assume the Kitty image protocol isn't available)");
         }
         Ok(response) => {
-            let kitty_support = response.starts_with("\x1b_Gi=31;OK\x1b");
+            let kitty_support = response.starts_with("_Gi=31;OK");
             if kitty_support {
                 println!("Kitty image protocol IS supported");
             } else {

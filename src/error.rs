@@ -14,6 +14,10 @@ pub enum XQError {
     #[error("Nix error: {0}")]
     #[cfg(unix)]
     NixError(#[from] nix::errno::Errno),
+    #[error("Not an OSC response")]
+    NotAnOSCResponse,
+    #[error("Provided buffer is too small")]
+    BufferOverflow,
     #[error("Unsupported platform")]
     Unsupported,
 }

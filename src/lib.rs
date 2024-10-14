@@ -16,6 +16,22 @@ pub fn query<MS: Into<u64>>(query: &str, timeout_ms: MS) -> Result<String, XQErr
     let s = std::str::from_utf8(&response[..n])?;
     Ok(s.to_string())
 }
+/// Query the xterm interface for an OSC sequence, assuming the terminal is in raw mode
+/// (or we would block waiting for a newline).
+///
+/// The query should be a proper OSC sequence (ie already wrapped, eg "\x1b]11;?\x07")
+/// as you want it to be sent to stdout but the answer is only the part after the C0 (ESC)
+/// and before the OSC terminator (BEL or ESC).
+pub fn query_osc<MS: Into<u64>>(query: &str, timeout_ms: MS) -> Result<String, XQError> {
+    // I'll use <const N: usize = 100> when default values for const generics
+    // are stabilized for enough rustc versions
+    // See https://github.com/rust-lang/rust/issues/44580
+    const N: usize = 100;
+    let mut response = [0; N];
+    let resp = query_osc_buffer(query, &mut response, timeout_ms.into())?;
+    let s = std::str::from_utf8(resp)?;
+    Ok(s.to_string())
+}
 
 /// Query the xterm interface, assuming the terminal is in raw mode
 /// (or we would block waiting for a newline).
@@ -38,7 +54,6 @@ pub fn query_buffer<MS: Into<u64>>(
     stdout.flush()?;
     let mut stdin = File::open("/dev/tty")?;
     let stdin_fd = stdin.as_fd();
-
     match wait_for_input(stdin_fd, timeout_ms) {
         Ok(0) => Err(XQError::Timeout),
         Ok(_) => {
@@ -47,6 +62,72 @@ pub fn query_buffer<MS: Into<u64>>(
         }
         Err(e) => Err(XQError::IO(e.into())),
     }
+}
+
+/// Query the xterm interface for an OSC response, assuming the terminal is in raw mode
+/// (or we would block waiting for a newline).
+///
+/// The provided query should be a proper OSC sequence (ie already wrapped, eg "\x1b]11;?\x07")
+///
+/// Return a slice of the buffer containing the response. This slice excludes
+/// - the response start (ESC) and everything before
+/// - the response end (ESC or BEL) and everything after
+///
+/// OSC sequence:
+///  <https://en.wikipedia.org/wiki/ANSI_escape_code#OSC_(Operating_System_Command)_sequences>
+#[cfg(unix)]
+pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
+    query: &str,
+    buffer: &'b mut [u8],
+    timeout_ms: MS,
+) -> Result<&'b [u8], XQError> {
+    use std::{
+        fs::File,
+        io::{self, Read, Write},
+        os::fd::AsFd,
+    };
+    let stdout = io::stdout();
+    let mut stdout = stdout.lock();
+    write!(stdout, "{}", query)?;
+    stdout.flush()?;
+    let mut stdin = File::open("/dev/tty")?;
+    let mut osc_start_idx = None;
+    let mut bytes_written = 0;
+    while bytes_written < buffer.len() {
+        let stdin_fd = stdin.as_fd();
+        match wait_for_input(stdin_fd, timeout_ms) {
+            Ok(0) => {
+                return Err(XQError::Timeout);
+            }
+            Ok(_) => {
+                let bytes_read = stdin.read(&mut buffer[bytes_written..])?;
+                if bytes_read == 0 {
+                    return Err(XQError::NotAnOSCResponse); // EOF
+                }
+                // the sequence must start with a ESC (27) and end either with a ESC or BEL (7)
+                for i in bytes_written..bytes_written + bytes_read {
+                    let b = buffer[i];
+                    match osc_start_idx {
+                        None => {
+                            if b == 27 {
+                                osc_start_idx = Some(i);
+                            }
+                        }
+                        Some(start_idx) => {
+                            if b == 27 || b == 7 {
+                                return Ok(&buffer[start_idx + 1..=i]);
+                            }
+                        }
+                    }
+                }
+                bytes_written += bytes_read;
+            }
+            Err(e) => {
+                return Err(XQError::IO(e.into()));
+            }
+        }
+    }
+    Err(XQError::BufferOverflow)
 }
 
 #[cfg(not(unix))]
