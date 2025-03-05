@@ -86,12 +86,20 @@ pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
         io::{self, Read, Write},
         os::fd::AsFd,
     };
+    const ESC: char = '\x1b';
+
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
     write!(stdout, "{}", query)?;
+    // Ask for a Status Report as a "fence". Almost all terminals will
+    // support that command, even if they don't support returning the
+    // background color, so we can detect "not supported" by the
+    // Status Report being answered first.
+    write!(stdout, "{ESC}[5n")?;
     stdout.flush()?;
     let mut stdin = File::open("/dev/tty")?;
     let mut osc_start_idx = None;
+    let mut osc_end_idx = None;
     let mut bytes_written = 0;
     while bytes_written < buffer.len() {
         let stdin_fd = stdin.as_fd();
@@ -105,17 +113,27 @@ pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
                     return Err(XQError::NotAnOSCResponse); // EOF
                 }
                 // the sequence must start with a ESC (27) and end either with a ESC or BEL (7)
+                // then, we'll get an 'n' back from the "fence"
                 for i in bytes_written..bytes_written + bytes_read {
                     let b = buffer[i];
                     match osc_start_idx {
                         None => {
-                            if b == 27 {
+                            if b == ESC as u8 {
                                 osc_start_idx = Some(i);
                             }
                         }
                         Some(start_idx) => {
-                            if b == 27 || b == 7 {
-                                return Ok(&buffer[start_idx + 1..=i]);
+                            if b == ESC as u8 || b == /* BEL */ 7 {
+                                if osc_end_idx.is_none() {
+                                    osc_end_idx = Some(i);
+                                }
+                            } else if b == b'n' {
+                                match osc_end_idx {
+                                    None => return Err(XQError::NotAnOSCResponse),
+                                    Some(end_idx) => {
+                                        return Ok(&buffer[start_idx + 1..=end_idx]);
+                                    }
+                                }
                             }
                         }
                     }
