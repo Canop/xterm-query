@@ -89,14 +89,34 @@ pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
     const ESC: char = '\x1b';
     const BEL: char = '\x07';
 
+    // Do some casing based on the terminal
+    let term = std::env::var("TERM").map_err(|_| XQError::Unsupported)?;
+    if term == "dumb" {
+        return Err(XQError::Unsupported);
+    }
+    let is_screen = term.starts_with("screen");
+
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
+
+    // Running under GNU Screen, the commands need to be "escaped",
+    // apparently.  We wrap them in a "Device Control String", which
+    // will make Screen forward the contents uninterpreted.
+    if is_screen {
+        write!(stdout, "{ESC}P")?;
+    }
+
     write!(stdout, "{}", query)?;
     // Ask for a Status Report as a "fence". Almost all terminals will
     // support that command, even if they don't support returning the
     // background color, so we can detect "not supported" by the
     // Status Report being answered first.
     write!(stdout, "{ESC}[5n")?;
+
+    if is_screen {
+        write!(stdout, "{ESC}\\")?;
+    }
+
     stdout.flush()?;
     let mut stdin = File::open("/dev/tty")?;
     let mut osc_start_idx = None;
