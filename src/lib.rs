@@ -87,6 +87,7 @@ pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
         os::fd::AsFd,
     };
     const ESC: char = '\x1b';
+    const BEL: char = '\x07';
 
     let stdout = io::stdout();
     let mut stdout = stdout.lock();
@@ -123,7 +124,7 @@ pub fn query_osc_buffer<'b, MS: Into<u64> + Copy>(
                             }
                         }
                         Some(start_idx) => {
-                            if b == ESC as u8 || b == /* BEL */ 7 {
+                            if b == ESC as u8 || b == BEL as u8 {
                                 if osc_end_idx.is_none() {
                                     osc_end_idx = Some(i);
                                 }
