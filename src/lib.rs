@@ -78,11 +78,10 @@ fn wait_for_input<MS: Into<u64>>(fd: BorrowedFd<'_>, timeout_ms: MS) -> Result<i
     };
     let mut fd_set = FdSet::new();
     fd_set.insert(fd);
-    let timeout_us = Duration::from_millis(timeout_ms.into())
-        .as_micros()
-        .try_into()
-        .map_err(|_| Errno::EOVERFLOW)?;
-    let mut tv = TimeVal::new(0, timeout_us);
+    let mut dur =  Duration::from_millis(timeout_ms.into());
+    let timeout_s = dur.as_secs() as _;
+    let timeout_us = dur.subsec_micros() as _;
+    let mut tv = TimeVal::new(timeout_s, timeout_us);
 
     select(
         fd.as_raw_fd() + 1,
