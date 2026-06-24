@@ -91,7 +91,12 @@ pub(crate) fn scan_osc(buf: &[u8]) -> OscScan {
             Some(start) => {
                 if osc_end.is_none() && (b == ESC || b == BEL) {
                     osc_end = Some(i);
-                } else if b == b'n' {
+                } else if i >= 3
+                    && buf[i - 3] == ESC
+                    && buf[i - 2] == b'['
+                    && buf[i - 1] == b'0'
+                    && b == b'n'
+                {
                     return match osc_end {
                         None => OscScan::NotOsc,
                         Some(end) => OscScan::Found {
