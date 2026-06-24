@@ -18,7 +18,8 @@ Low level library to query the terminal with a CSI sequence and get the result a
 Notes:
 
 - the terminal must already be in raw mode
-- there's no Windows support (it should be possible with [WSAPoll](https://learn.microsoft.com/en-us/windows/win32/api/winsock2/nf-winsock2-wsapoll) but I don't have any Windows computer to test so a PR would be welcome)
+- the query should be issued while nothing else is reading terminal input
+- Windows is supported, reading the reply from the console input (`CONIN$`) after switching it to `ENABLE_VIRTUAL_TERMINAL_INPUT` for the duration of the query. Caveat: the Windows wait can wake on non-character console events (focus, mouse, buffer-resize), so a reply may occasionally be wrong or empty — treat an unparsable reply as "unsupported", and issue queries while the terminal is quiet (e.g. at startup)
 
 The provided example in examples/kitty demonstrates querying the terminal to know whether the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) is supported, and manages entering and leaving raw mode.
 
