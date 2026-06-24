@@ -311,6 +311,15 @@ mod tests {
     }
 
     #[test]
+    fn osc_payload_containing_n_is_found() {
+        // The OSC payload itself contains 'n' (e.g. `]11;none`); the scanner must
+        // not mistake that 'n' for the DSR fence and return NotOsc early.
+        let buf = b"\x1b]11;none\x07\x1b[0n";
+        let payload = found(buf).expect("OSC payload with 'n' should still be found");
+        assert_eq!(payload, b"]11;none\x07");
+    }
+
+    #[test]
     fn fence_answered_first_is_not_osc() {
         // Terminal doesn't support the query: only the DSR reply arrives.
         let buf = b"\x1b[0n";
