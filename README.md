@@ -13,15 +13,34 @@
 [l4]: https://miaou.dystroy.org/3
 
 
-Low level library to query the terminal with a CSI sequence and get the result as a string.
+<!-- cradoc start -->
+Query the terminal by writing an escape sequence and reading the reply.
 
-Notes:
+The terminal must be in raw mode (otherwise reads block on a newline), and
+the query should be issued when nothing else is reading terminal input.
 
-- the terminal must already be in raw mode
-- the query should be issued while nothing else is reading terminal input
-- Windows is supported, reading the reply from the console input (`CONIN$`) after switching it to `ENABLE_VIRTUAL_TERMINAL_INPUT` for the duration of the query. Caveat: the Windows wait can wake on non-character console events (focus, mouse, buffer-resize), so a reply may occasionally be wrong or empty — treat an unparsable reply as "unsupported", and issue queries while the terminal is quiet (e.g. at startup)
+The provided example in examples/kitty demonstrates querying the terminal to
+know whether the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+is supported, and manages entering and leaving raw mode.
 
-The provided example in examples/kitty demonstrates querying the terminal to know whether the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/) is supported, and manages entering and leaving raw mode.
+# Platform support
 
-If you think you might use this crate but are unsure, don't hesitate to come to Miaou: [![s4]][s4]
+This crate supports Linux, MacOS, and Windows. When a platform is not supported, the query
+functions return `XQError::Unsupported`.
+
+Unix reads the reply from `/dev/tty` using `poll`/`select`. Windows reads it
+from the console input (`CONIN$`) after switching it to
+`ENABLE_VIRTUAL_TERMINAL_INPUT` for the duration of the query.
+
+## Windows limitation
+
+The Windows wait wakes on any console input event, including focus, mouse,
+and buffer-resize events, which under VT-input mode may be delivered as
+escape sequences. If such an event arrives in the query window, the reply
+can be wrong or empty, so callers should treat an unparsable reply as
+"unsupported" and degrade gracefully. Issue queries while the terminal is
+otherwise quiet (e.g. at startup, before an input loop begins).
+
+<!-- cradoc end -->
+
 

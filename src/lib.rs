@@ -3,7 +3,14 @@
 //! The terminal must be in raw mode (otherwise reads block on a newline), and
 //! the query should be issued when nothing else is reading terminal input.
 //!
+//! The provided example in examples/kitty demonstrates querying the terminal to
+//! know whether the [Kitty graphics protocol](https://sw.kovidgoyal.net/kitty/graphics-protocol/)
+//! is supported, and manages entering and leaving raw mode.
+//!
 //! # Platform support
+//!
+//! This crate supports Linux, MacOS, and Windows. When a platform is not supported, the query
+//! functions return `XQError::Unsupported`.
 //!
 //! Unix reads the reply from `/dev/tty` using `poll`/`select`. Windows reads it
 //! from the console input (`CONIN$`) after switching it to
